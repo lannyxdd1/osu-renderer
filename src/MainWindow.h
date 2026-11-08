@@ -92,6 +92,8 @@ private:
     QCheckBox *m_storyboardCheck, *m_backgroundVideoCheck, *m_parallaxCheck, *m_backgroundBlurCheck, *m_bloomCheck;
     QCheckBox *m_drawObjectsCheck, *m_approachCheck, *m_numbersCheck, *m_followPointsCheck, *m_hitAnimationsCheck, *m_beatScaleCheck, *m_snakeInCheck, *m_snakeOutCheck;
     QComboBox *m_presetCombo;
+    QSlider *m_musicVolumeSlider;
+    QSlider *m_hitsoundVolumeSlider;
     QJsonArray m_userPresets;
     QPushButton *m_startBtn;
     QPushButton *m_cancelBtn;

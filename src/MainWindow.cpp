@@ -53,6 +53,9 @@ void MainWindow::setupUi()
     QWidget *playfieldTab = new QWidget(tabs);
     QVBoxLayout *playfieldLayout = new QVBoxLayout(playfieldTab);
     tabs->addTab(playfieldTab, "Playfield");
+    QWidget *audioTab = new QWidget(tabs);
+    QFormLayout *audioLayout = new QFormLayout(audioTab);
+    tabs->addTab(audioTab, "Audio");
     mainLayout->addWidget(tabs);
 
     // ===== Replay selection =====
@@ -284,6 +287,15 @@ void MainWindow::setupUi()
     for (const auto &item : playItems) { *item.second = new QCheckBox(playContent); (*item.second)->setChecked(item.first != "Load background video" && item.first != "Background blur" && item.first != "Bloom"); playForm->addRow(item.first + ":", *item.second); }
     playScroll->setWidget(playContent); playfieldLayout->addWidget(playScroll);
 
+    m_musicVolumeSlider = new QSlider(Qt::Horizontal, audioTab);
+    m_musicVolumeSlider->setRange(0, 100); m_musicVolumeSlider->setValue(50);
+    m_musicVolumeSlider->setTickPosition(QSlider::TicksBelow); m_musicVolumeSlider->setTickInterval(10);
+    audioLayout->addRow("Music volume:", m_musicVolumeSlider);
+    m_hitsoundVolumeSlider = new QSlider(Qt::Horizontal, audioTab);
+    m_hitsoundVolumeSlider->setRange(0, 100); m_hitsoundVolumeSlider->setValue(50);
+    m_hitsoundVolumeSlider->setTickPosition(QSlider::TicksBelow); m_hitsoundVolumeSlider->setTickInterval(10);
+    audioLayout->addRow("Hitsound volume:", m_hitsoundVolumeSlider);
+
     QGroupBox *presetGroup = new QGroupBox("Quick presets", videoTab);
     QFormLayout *presetLayout = new QFormLayout(presetGroup);
     m_presetCombo = new QComboBox(presetGroup);
@@ -506,6 +518,7 @@ void MainWindow::startRender()
     m_renderer->setEndTime(m_endTimeSpin->value());
     m_renderer->setAudioOffset(m_audioOffsetSpin->value());
     m_renderer->setMotionBlur(m_motionBlurCheck->isChecked(), m_blurSamplesSpin->value());
+    m_renderer->setVolumes(m_musicVolumeSlider->value() / 100.0, m_hitsoundVolumeSlider->value() / 100.0);
     m_renderer->setHudOptions({{"score",m_hudScore->isChecked()},{"hp",m_hudHp->isChecked()},{"combo",m_hudCombo->isChecked()},{"pp",m_hudPp->isChecked()},{"error",m_hudError->isChecked()},{"keys",m_hudKeys->isChecked()},{"mods",m_hudMods->isChecked()},{"leaderboard",m_hudBoard->isChecked()},{"hitCounter",m_hudHits->isChecked()},{"strain",m_hudStrain->isChecked()}});
     m_renderer->setPlayfieldOptions({{"dim",m_backgroundDim->value()},{"storyboard",m_storyboardCheck->isChecked()},{"video",m_backgroundVideoCheck->isChecked()},{"parallax",m_parallaxCheck->isChecked()},{"blur",m_backgroundBlurCheck->isChecked()},{"bloom",m_bloomCheck->isChecked()},{"objects",m_drawObjectsCheck->isChecked()},{"approach",m_approachCheck->isChecked()},{"numbers",m_numbersCheck->isChecked()},{"follow",m_followPointsCheck->isChecked()},{"animations",m_hitAnimationsCheck->isChecked()},{"beatScale",m_beatScaleCheck->isChecked()},{"snakeIn",m_snakeInCheck->isChecked()},{"snakeOut",m_snakeOutCheck->isChecked()}});
     m_renderer->start();
@@ -575,6 +588,8 @@ void MainWindow::saveConfig()
     config["audioOffset"] = m_audioOffsetSpin->value();
     config["motionBlur"] = m_motionBlurCheck->isChecked();
     config["blurSamples"] = m_blurSamplesSpin->value();
+    config["musicVolume"] = m_musicVolumeSlider->value();
+    config["hitsoundVolume"] = m_hitsoundVolumeSlider->value();
     QJsonArray skins;
     for (int i = 0; i < m_skinList->count(); ++i) {
         QJsonObject skin;
@@ -631,6 +646,8 @@ void MainWindow::loadConfig()
     if (config.contains("audioOffset")) m_audioOffsetSpin->setValue(config["audioOffset"].toInt());
     if (config.contains("motionBlur")) m_motionBlurCheck->setChecked(config["motionBlur"].toBool());
     if (config.contains("blurSamples")) m_blurSamplesSpin->setValue(config["blurSamples"].toInt());
+    if (config.contains("musicVolume")) m_musicVolumeSlider->setValue(config["musicVolume"].toInt());
+    if (config.contains("hitsoundVolume")) m_hitsoundVolumeSlider->setValue(config["hitsoundVolume"].toInt());
     for (const QJsonValue &value : config["skins"].toArray()) {
         const QJsonObject skin = value.toObject();
         const QString path = skin["path"].toString();

@@ -29,6 +29,7 @@ public:
     void setEndTime(double seconds);
     void setAudioOffset(int milliseconds);
     void setMotionBlur(bool enabled, int samples);
+    void setVolumes(double music, double hitsounds);
     void setHudOptions(const QJsonObject &options);
     void setPlayfieldOptions(const QJsonObject &options);
 
@@ -70,6 +71,8 @@ private:
     int m_audioOffset;
     bool m_motionBlur;
     int m_blurSamples;
+    double m_musicVolume = 0.5;
+    double m_hitsoundVolume = 0.5;
     QJsonObject m_hudOptions;
     QJsonObject m_playfieldOptions;
     QStringList m_args;

@@ -97,6 +97,11 @@ void Renderer::setMotionBlur(bool enabled, int samples)
     m_motionBlur = enabled;
     m_blurSamples = samples;
 }
+void Renderer::setVolumes(double music, double hitsounds)
+{
+    m_musicVolume = music;
+    m_hitsoundVolume = hitsounds;
+}
 void Renderer::setHudOptions(const QJsonObject &options) { m_hudOptions = options; }
 void Renderer::setPlayfieldOptions(const QJsonObject &options) { m_playfieldOptions = options; }
 
@@ -163,6 +168,10 @@ bool Renderer::prepareDanserProfile(QString *errorMessage)
     QJsonObject general = profile.value("General").toObject();
     general["OsuSongsDir"] = songsDirectory;
     profile["General"] = general;
+    QJsonObject audio = profile.value("Audio").toObject();
+    audio["MusicVolume"] = m_musicVolume;
+    audio["SampleVolume"] = m_hitsoundVolume;
+    profile["Audio"] = audio;
     QJsonObject recording = profile.value("Recording").toObject();
     recording["FrameWidth"] = m_width;
     recording["FrameHeight"] = m_height;
