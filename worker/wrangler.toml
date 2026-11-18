@@ -5,7 +5,7 @@ compatibility_date = "2025-01-01"
 [vars]
 # Public URL of the Worker. Replace after the first `wrangler deploy` and
 # deploy once more so that share links become absolute.
-PUBLIC_BASE = "https://osu-replays.example.workers.dev"
+PUBLIC_BASE = "https://osu-replays.lannyxdd.workers.dev"
 # GitHub Pages address of the site (no trailing slash).
 PAGES_BASE = "https://lannyxdd111-design.github.io/osu-renderer"
 # Repository that stores one release per replay. Must be public.
