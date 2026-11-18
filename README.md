@@ -30,7 +30,8 @@ cmake --build build -j2
 Чтобы приложение появилось в меню Openbox в разделе **Applications → Other**:
 
 ```bash
-install -Dm755 build/osu_render ~/.local/bin/osu_render
+install -d ~/.local/bin
+ln -sfn "$PWD/run.sh" ~/.local/bin/osu_render
 install -Dm644 osu-render.desktop ~/.local/share/applications/osu-render.desktop
 sed -i "s|^Exec=osu_render|Exec=$HOME/.local/bin/osu_render|" \
     ~/.local/share/applications/osu-render.desktop
@@ -38,6 +39,14 @@ obmenu-generator -d   # обновить кэш меню
 ```
 
 Путь в `Exec` нужен абсолютный: Openbox при запуске не всегда получает `~/.local/bin` в `PATH`.
+
+Ссылка ведёт на `run.sh` — он при каждом запуске забирает свежий коммит
+(`git pull --ff-only`), пересобирает проект инкрементально и только потом
+запускает `build/osu_render`. Если сети нет, есть локальные правки или сборка
+упала, запускается та версия, что уже лежит в `build/`. Лог: `~/.cache/osu_render/launch.log`.
+
+Переменные для отладки: `OSU_RENDER_NO_UPDATE=1` — не делать `git pull`,
+`OSU_RENDER_NO_LAUNCH=1` — только обновиться и собрать, без запуска.
 
 ## Использование
 
