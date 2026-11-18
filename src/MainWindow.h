@@ -24,6 +24,8 @@
 #include <QJsonArray>
 #include "Renderer.h"
 
+class Publisher;
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -37,6 +39,7 @@ private slots:
     void browseReplayDirectory();
     void refreshReplayList();
     void browseDanser();
+    void browseSongs();
     void browseSkin();
     void addSkin();
     void removeSkin();
@@ -53,6 +56,10 @@ private slots:
     void toggleCustomResolution(bool enabled);
     void saveConfig();
     void loadConfig();
+    void publishLastRender();
+    void onPublishStatus(const QString &message);
+    void onPublishFinished(const QString &url);
+    void onPublishError(const QString &message);
 
 public:
     void setDanserPath(const QString &path);
@@ -60,18 +67,28 @@ public:
 private:
     void setupUi();
     QJsonObject capturePreset() const;
+    QJsonObject renderSettings() const;
+    QString resolvedOutputPath() const;
     void applyPreset(const QJsonObject &preset);
     void refreshUserPresets();
 
     Renderer *m_renderer;
+    Publisher *m_publisher = nullptr;
 
     // UI elements
     QLineEdit *m_replayEdit;
     QLineEdit *m_replayDirEdit;
     QComboBox *m_replayCombo;
     QLineEdit *m_danserEdit;
+    QLineEdit *m_songsEdit;
     QLineEdit *m_skinEdit;
     QLineEdit *m_outputEdit;
+    QLineEdit *m_workerEdit;
+    QLineEdit *m_publishTokenEdit;
+    QLineEdit *m_githubTokenEdit;
+    QCheckBox *m_autoPublishCheck;
+    QPushButton *m_publishBtn;
+    QLabel *m_publishStatus;
     QSpinBox *m_fpsSpin;
     QComboBox *m_resPresets;
     QSpinBox *m_widthSpin;
@@ -95,6 +112,10 @@ private:
     QSlider *m_musicVolumeSlider;
     QSlider *m_hitsoundVolumeSlider;
     QJsonArray m_userPresets;
+    QJsonObject m_lastRenderSettings;
+    QString m_lastRenderVideo;
+    QString m_lastRenderReplay;
+    bool m_hasRender = false;
     QPushButton *m_startBtn;
     QPushButton *m_cancelBtn;
     QProgressBar *m_progressBar;

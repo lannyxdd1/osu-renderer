@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>osu! replays</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap top-inner">
+      <a class="brand" href="./">osu! replays</a>
+      <span class="muted small">rendered with danser</span>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="toolbar">
+      <input id="search" class="input" type="search" placeholder="Search player or map" autocomplete="off">
+      <select id="mod-filter" class="input">
+        <option value="">All mods</option>
+      </select>
+    </div>
+
+    <p id="status" class="muted small">Loading...</p>
+    <section id="grid" class="grid"></section>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

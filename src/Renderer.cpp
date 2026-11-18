@@ -7,7 +7,91 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QStandardPaths>
+
+namespace {
+
+// Returns the absolute path of an existing directory, or an empty string.
+QString existingDirectory(const QString &path)
+{
+    if (path.isEmpty()) {
+        return {};
+    }
+    QString expanded = path;
+    if (expanded.startsWith("~/")) {
+        expanded = QDir::homePath() + expanded.mid(1);
+    }
+    const QFileInfo info(expanded);
+    if (!info.exists() || !info.isDir()) {
+        return {};
+    }
+    return info.absoluteFilePath();
+}
+
+// osu! stores the beatmap folder name in osu!*.cfg (usually osu!.<user>.cfg).
+// Fall back to the default "Songs" folder when the config is missing.
+QString songsDirectoryInOsuInstall(const QString &osuDirectory)
+{
+    const QDir osuDir(osuDirectory);
+    if (!osuDir.exists()) {
+        return {};
+    }
+
+    const QStringList configs = osuDir.entryList({QStringLiteral("osu!*.cfg")}, QDir::Files);
+    for (const QString &configName : configs) {
+        QFile config(osuDir.filePath(configName));
+        if (!config.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            continue;
+        }
+        const QStringList lines = QString::fromUtf8(config.readAll()).split('\n');
+        for (const QString &line : lines) {
+            const QString trimmed = line.trimmed();
+            if (!trimmed.startsWith("BeatmapDirectory")) {
+                continue;
+            }
+            const QString value = trimmed.section('=', 1).trimmed();
+            if (value.isEmpty()) {
+                continue;
+            }
+            const QString path = QDir::isAbsolutePath(value) ? value : osuDir.filePath(value);
+            if (const QString songs = existingDirectory(path); !songs.isEmpty()) {
+                return songs;
+            }
+        }
+    }
+
+    return existingDirectory(osuDir.filePath("Songs"));
+}
+
+// Shallow scan for osu! installations with non-standard locations.
+QStringList findOsuInstallRoots(const QString &root, int depth)
+{
+    QStringList result;
+    const QDir dir(root);
+    if (!dir.exists() || depth < 0) {
+        return result;
+    }
+
+    const QFileInfoList entries = dir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot | QDir::Readable);
+    for (const QFileInfo &entry : entries) {
+        const QString name = entry.fileName();
+        if (name.startsWith('.') || name == "node_modules" || name == "snap"
+            || name == "flatpak" || name == "Trash" || name == "wineprefixes") {
+            continue;
+        }
+        const QString path = entry.filePath();
+        if (name == "osu!" || name == "osu" || name == "osu-stable" || name == "osu-winello"
+            || QFileInfo(path + "/osu!.exe").isFile()) {
+            result.append(path);
+            continue;
+        }
+        if (depth > 0) {
+            result.append(findOsuInstallRoots(path, depth - 1));
+        }
+    }
+    return result;
+}
+
+} // namespace
 
 Renderer::Renderer(QObject *parent)
     : QObject(parent)
@@ -55,6 +139,11 @@ void Renderer::setReplayPath(const QString &path)
 void Renderer::setSkinPath(const QString &path)
 {
     m_skinPath = path;
+}
+
+void Renderer::setSongsPath(const QString &path)
+{
+    m_songsPath = path;
 }
 
 void Renderer::setOutputPath(const QString &path)
@@ -159,10 +248,11 @@ bool Renderer::prepareDanserProfile(QString *errorMessage)
     }
 
     QJsonObject profile = document.object();
-    const QString songsDirectory = discoverSongsDirectory();
+    const QString songsDirectory = discoverSongsDirectory(profile);
     if (songsDirectory.isEmpty()) {
-        *errorMessage = "Не найдена папка Songs. Откройте osu!-winello, скачайте хотя бы одну карту "
-                        "или укажите существующую папку Songs в settings/default.json danser.";
+        *errorMessage = "Не найдена папка Songs. Укажите её в поле «Songs folder» "
+                        "(обычно " + QDir::homePath() + "/osu-wine/osu!/Songs) или запустите osu! "
+                        "хотя бы один раз и скачайте карту.";
         return false;
     }
     QJsonObject general = profile.value("General").toObject();
@@ -273,22 +363,71 @@ bool Renderer::prepareDanserProfile(QString *errorMessage)
     return true;
 }
 
-QString Renderer::discoverSongsDirectory() const
+QString Renderer::discoverSongsDirectory(const QJsonObject &profile) const
 {
-    const QString home = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
-    const QStringList candidates = {
-        home + "/.local/share/osu-wine/osu!/Songs", // osu-winello
-        home + "/.osu/Songs",                       // osu! stable / legacy setups
-        home + "/.local/share/osu/Songs",
-        home + "/osu!/Songs"
-    };
+    // 1. Folder chosen explicitly by the user (UI field / config).
+    if (const QString songs = existingDirectory(m_songsPath); !songs.isEmpty()) {
+        return songs;
+    }
 
-    for (const QString &path : candidates) {
-        const QDir directory(path);
-        if (directory.exists()) {
-            return directory.absolutePath();
+    // 2. Folder already configured in danser's own default.json.
+    const QString configured = profile.value("General").toObject().value("OsuSongsDir").toString();
+    if (const QString songs = existingDirectory(configured); !songs.isEmpty()) {
+        return songs;
+    }
+    if (!configured.isEmpty()) {
+        const QDir danserDir(QFileInfo(m_danserPath).absolutePath());
+        if (const QString songs = existingDirectory(danserDir.filePath(configured)); !songs.isEmpty()) {
+            return songs;
         }
     }
+
+    // 3. Known osu!/osu-winello installation folders.
+    const QString home = QDir::homePath();
+    QStringList osuRoots = {
+        home + "/osu-wine/osu!",                // osu-winello (current layout)
+        home + "/.local/share/osu-wine/osu!",   // osu-winello (older layout)
+        home + "/.osu/Songs",                   // osu! stable / legacy setups
+        home + "/.local/share/osu/Songs",
+        home + "/osu!/Songs",
+        home + "/osu-winello/osu!",
+        home + "/Games/osu!"
+    };
+
+    // 4. osu! installed inside Wine prefixes.
+    const QStringList wineRoots = {
+        home + "/.wine",
+        home + "/.local/share/wineprefixes"
+    };
+    for (const QString &wineRoot : wineRoots) {
+        const QDir root(wineRoot);
+        if (!root.exists()) {
+            continue;
+        }
+        const QStringList prefixes = root.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+        for (const QString &prefix : prefixes) {
+            const QString usersDir = root.filePath(prefix + "/drive_c/users");
+            const QStringList users = QDir(usersDir).entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+            for (const QString &user : users) {
+                osuRoots << usersDir + "/" + user + "/AppData/Local/osu!";
+            }
+        }
+    }
+
+    // 5. Shallow scan of the home folder for non-standard installations.
+    osuRoots << findOsuInstallRoots(home, 2);
+
+    for (const QString &root : osuRoots) {
+        const QString direct = existingDirectory(root);
+        // Entries like ~/.osu/Songs already point straight at Songs.
+        if (!direct.isEmpty() && QFileInfo(direct).fileName() == "Songs") {
+            return direct;
+        }
+        if (const QString songs = songsDirectoryInOsuInstall(root); !songs.isEmpty()) {
+            return songs;
+        }
+    }
+
     return {};
 }
 

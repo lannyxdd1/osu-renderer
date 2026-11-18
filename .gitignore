@@ -13,6 +13,11 @@ Makefile
 settings/
 videos/
 
+# Worker dependencies and secrets
+node_modules/
+.wrangler/
+.dev.vars
+
 # Editor and OS files
 .vscode/
 .idea/

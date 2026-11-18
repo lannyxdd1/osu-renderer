@@ -1,0 +1,19 @@
+name = "osu-replays"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+[vars]
+# Public URL of the Worker. Replace after the first `wrangler deploy` and
+# deploy once more so that share links become absolute.
+PUBLIC_BASE = "https://osu-replays.example.workers.dev"
+# GitHub Pages address of the site (no trailing slash).
+PAGES_BASE = "https://lannyxdd111-design.github.io/osu-renderer"
+# Repository that stores one release per replay. Must be public.
+GITHUB_REPO = "lannyxdd111-design/osu-renderer"
+# "redirect" serves video straight from GitHub, "proxy" streams it through
+# the Worker (useful if a provider or network blocks GitHub download URLs).
+MEDIA_MODE = "redirect"
+
+[[kv_namespaces]]
+binding = "REPLAYS"
+id = "436a3ada810d4f1588a953e13f7781c5"

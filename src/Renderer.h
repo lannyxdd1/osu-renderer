@@ -18,6 +18,7 @@ public:
     void setDanserPath(const QString &path);
     void setReplayPath(const QString &path);
     void setSkinPath(const QString &path);
+    void setSongsPath(const QString &path);
     void setOutputPath(const QString &path);
     void setFps(int fps);
     void setResolution(int width, int height);
@@ -50,7 +51,7 @@ private slots:
 
 private:
     bool prepareDanserProfile(QString *errorMessage);
-    QString discoverSongsDirectory() const;
+    QString discoverSongsDirectory(const QJsonObject &profile) const;
     void buildArgs(const QString &profileName);
     void readProcessOutput();
 
@@ -58,6 +59,7 @@ private:
     QString m_danserPath;
     QString m_replayPath;
     QString m_skinPath;
+    QString m_songsPath;
     QString m_outputPath;
     int m_fps;
     int m_width;

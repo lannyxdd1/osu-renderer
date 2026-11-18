@@ -1,4 +1,7 @@
 #include "MainWindow.h"
+#include "Publisher.h"
+#include <QApplication>
+#include <QClipboard>
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QJsonObject>
@@ -24,6 +27,11 @@ MainWindow::MainWindow(QWidget *parent)
 
     setupUi();
     loadConfig();
+
+    m_publisher = new Publisher(this);
+    connect(m_publisher, &Publisher::status, this, &MainWindow::onPublishStatus);
+    connect(m_publisher, &Publisher::finished, this, &MainWindow::onPublishFinished);
+    connect(m_publisher, &Publisher::error, this, &MainWindow::onPublishError);
 
     setWindowTitle("osu! Replay Renderer");
 }
@@ -70,6 +78,16 @@ void MainWindow::setupUi()
     danserRow->addWidget(m_danserEdit);
     danserRow->addWidget(browseDanserBtn);
     replayLayout->addRow("danser-cli:", danserRow);
+
+    m_songsEdit = new QLineEdit(this);
+    m_songsEdit->setPlaceholderText("Optional: osu! Songs folder (auto-detected)");
+    m_songsEdit->setToolTip("Папка Songs вашей установки osu!. Пусто — искать автоматически.");
+    QPushButton *browseSongsBtn = new QPushButton("Browse…", this);
+    connect(browseSongsBtn, &QPushButton::clicked, this, &MainWindow::browseSongs);
+    QHBoxLayout *songsRow = new QHBoxLayout;
+    songsRow->addWidget(m_songsEdit);
+    songsRow->addWidget(browseSongsBtn);
+    replayLayout->addRow("Songs folder:", songsRow);
 
     m_replayEdit = new QLineEdit(this);
     m_replayEdit->setPlaceholderText("path/to/replay.osr");
@@ -296,6 +314,36 @@ void MainWindow::setupUi()
     m_hitsoundVolumeSlider->setTickPosition(QSlider::TicksBelow); m_hitsoundVolumeSlider->setTickInterval(10);
     audioLayout->addRow("Hitsound volume:", m_hitsoundVolumeSlider);
 
+    QWidget *publishTab = new QWidget(tabs);
+    QFormLayout *publishLayout = new QFormLayout(publishTab);
+    m_workerEdit = new QLineEdit(publishTab);
+    m_workerEdit->setPlaceholderText("https://osu-replays.<name>.workers.dev");
+    publishLayout->addRow("Worker URL:", m_workerEdit);
+    m_publishTokenEdit = new QLineEdit(publishTab);
+    m_publishTokenEdit->setEchoMode(QLineEdit::Password);
+    m_publishTokenEdit->setPlaceholderText("UPLOAD_TOKEN");
+    publishLayout->addRow("Publish token:", m_publishTokenEdit);
+    m_githubTokenEdit = new QLineEdit(publishTab);
+    m_githubTokenEdit->setEchoMode(QLineEdit::Password);
+    m_githubTokenEdit->setPlaceholderText("github_pat_… (Contents: Read and write)");
+    publishLayout->addRow("GitHub token:", m_githubTokenEdit);
+    m_autoPublishCheck = new QCheckBox("Publish after successful render", publishTab);
+    publishLayout->addRow("Automatic:", m_autoPublishCheck);
+    m_publishBtn = new QPushButton("Publish last render", publishTab);
+    m_publishBtn->setEnabled(false);
+    connect(m_publishBtn, &QPushButton::clicked, this, &MainWindow::publishLastRender);
+    publishLayout->addRow(m_publishBtn);
+    m_publishStatus = new QLabel(publishTab);
+    m_publishStatus->setWordWrap(true);
+    m_publishStatus->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    publishLayout->addRow(m_publishStatus);
+    QLabel *publishHint = new QLabel(
+        "Веб-версия 720p60 и превью загружаются в GitHub Releases. "
+        "Мастер-файл остаётся на компьютере.", publishTab);
+    publishHint->setWordWrap(true);
+    publishLayout->addRow(publishHint);
+    tabs->addTab(publishTab, "Publish");
+
     QGroupBox *presetGroup = new QGroupBox("Quick presets", videoTab);
     QFormLayout *presetLayout = new QFormLayout(presetGroup);
     m_presetCombo = new QComboBox(presetGroup);
@@ -354,6 +402,80 @@ QJsonObject MainWindow::capturePreset() const
     return {{"fps", m_fpsSpin->value()}, {"width", m_widthSpin->value()}, {"height", m_heightSpin->value()}, {"cursor", m_cursorScaleSpin->value()}, {"encoder", m_encoderCombo->currentData().toString()}, {"crf", m_crfSpin->value()}, {"skin", m_skinEdit->text()}, {"skip", m_skipIntroCheck->isChecked()}, {"start", m_startTimeSpin->value()}, {"end", m_endTimeSpin->value()}, {"offset", m_audioOffsetSpin->value()}, {"motion", m_motionBlurCheck->isChecked()}, {"samples", m_blurSamplesSpin->value()}, {"dim", m_backgroundDim->value()}, {"storyboard", m_storyboardCheck->isChecked()}, {"video", m_backgroundVideoCheck->isChecked()}, {"parallax", m_parallaxCheck->isChecked()}, {"blur", m_backgroundBlurCheck->isChecked()}, {"bloom", m_bloomCheck->isChecked()}, {"objects", m_drawObjectsCheck->isChecked()}, {"approach", m_approachCheck->isChecked()}, {"numbers", m_numbersCheck->isChecked()}, {"follow", m_followPointsCheck->isChecked()}, {"animations", m_hitAnimationsCheck->isChecked()}, {"beat", m_beatScaleCheck->isChecked()}, {"snakeIn", m_snakeInCheck->isChecked()}, {"snakeOut", m_snakeOutCheck->isChecked()}, {"hud", QJsonArray{m_hudScore->isChecked(),m_hudHp->isChecked(),m_hudCombo->isChecked(),m_hudPp->isChecked(),m_hudError->isChecked(),m_hudKeys->isChecked(),m_hudMods->isChecked(),m_hudBoard->isChecked(),m_hudHits->isChecked(),m_hudStrain->isChecked()}}};
 }
 
+QJsonObject MainWindow::renderSettings() const
+{
+    QJsonObject render;
+    render["fps"] = m_fpsSpin->value();
+    render["width"] = m_widthSpin->value();
+    render["height"] = m_heightSpin->value();
+    render["cursorScale"] = m_cursorScaleSpin->value();
+    render["encoder"] = m_encoderCombo->currentData().toString();
+    render["crf"] = m_crfSpin->value();
+    render["motionBlur"] = m_motionBlurCheck->isChecked();
+    render["blurSamples"] = m_blurSamplesSpin->value();
+
+    QJsonObject hud;
+    hud["score"] = m_hudScore->isChecked();
+    hud["hp"] = m_hudHp->isChecked();
+    hud["combo"] = m_hudCombo->isChecked();
+    hud["pp"] = m_hudPp->isChecked();
+    hud["error"] = m_hudError->isChecked();
+    hud["keys"] = m_hudKeys->isChecked();
+    hud["mods"] = m_hudMods->isChecked();
+    hud["leaderboard"] = m_hudBoard->isChecked();
+    hud["hitCounter"] = m_hudHits->isChecked();
+    hud["strain"] = m_hudStrain->isChecked();
+
+    QJsonObject playfield;
+    playfield["dim"] = qRound(m_backgroundDim->value() * 100.0);
+    playfield["storyboard"] = m_storyboardCheck->isChecked();
+    playfield["video"] = m_backgroundVideoCheck->isChecked();
+    playfield["parallax"] = m_parallaxCheck->isChecked();
+    playfield["blur"] = m_backgroundBlurCheck->isChecked();
+    playfield["bloom"] = m_bloomCheck->isChecked();
+    playfield["objects"] = m_drawObjectsCheck->isChecked();
+    playfield["approach"] = m_approachCheck->isChecked();
+    playfield["numbers"] = m_numbersCheck->isChecked();
+    playfield["follow"] = m_followPointsCheck->isChecked();
+    playfield["animations"] = m_hitAnimationsCheck->isChecked();
+    playfield["beatScale"] = m_beatScaleCheck->isChecked();
+    playfield["snakeIn"] = m_snakeInCheck->isChecked();
+    playfield["snakeOut"] = m_snakeOutCheck->isChecked();
+
+    QJsonObject timeline;
+    timeline["skipIntro"] = m_skipIntroCheck->isChecked();
+    timeline["start"] = m_startTimeSpin->value();
+    timeline["end"] = m_endTimeSpin->value();
+    timeline["audioOffset"] = m_audioOffsetSpin->value();
+
+    QJsonObject audio;
+    audio["musicVolume"] = m_musicVolumeSlider->value();
+    audio["hitsoundVolume"] = m_hitsoundVolumeSlider->value();
+
+    QJsonObject settings;
+    settings["render"] = render;
+    settings["hud"] = hud;
+    settings["playfield"] = playfield;
+    settings["timeline"] = timeline;
+    settings["audio"] = audio;
+    if (!m_skinEdit->text().trimmed().isEmpty()) {
+        settings["skin"] = QFileInfo(m_skinEdit->text()).fileName();
+    }
+    return settings;
+}
+
+QString MainWindow::resolvedOutputPath() const
+{
+    QString path = m_outputEdit->text();
+    if (path.isEmpty()) {
+        return path;
+    }
+    if (QFileInfo(path).suffix().isEmpty()) {
+        path += ".mp4";
+    }
+    return path;
+}
+
 void MainWindow::applyPreset(const QJsonObject &p)
 {
     if (p.contains("fps")) m_fpsSpin->setValue(p["fps"].toInt()); if (p.contains("width")) m_widthSpin->setValue(p["width"].toInt()); if (p.contains("height")) m_heightSpin->setValue(p["height"].toInt()); if (p.contains("cursor")) m_cursorScaleSpin->setValue(p["cursor"].toDouble());
@@ -393,6 +515,15 @@ void MainWindow::browseDanser()
     if (!path.isEmpty()) {
         m_danserEdit->setText(path);
         m_renderer->setDanserPath(path);
+    }
+}
+
+void MainWindow::browseSongs()
+{
+    const QString path = QFileDialog::getExistingDirectory(this, "Select osu! Songs folder", m_songsEdit->text());
+    if (!path.isEmpty()) {
+        m_songsEdit->setText(path);
+        saveConfig();
     }
 }
 
@@ -484,6 +615,10 @@ void MainWindow::browseOutput()
 
 void MainWindow::startRender()
 {
+    if (m_publisher && m_publisher->isBusy()) {
+        QMessageBox::warning(this, "Publish", "Дождитесь завершения публикации.");
+        return;
+    }
     if (m_replayEdit->text().isEmpty()) {
         QMessageBox::warning(this, "Warning", "Please select a replay file!");
         return;
@@ -506,6 +641,7 @@ void MainWindow::startRender()
     saveConfig();
     m_renderer->setDanserPath(m_danserEdit->text());
     m_renderer->setReplayPath(m_replayEdit->text());
+    m_renderer->setSongsPath(m_songsEdit->text());
     m_renderer->setOutputPath(m_outputEdit->text());
     m_renderer->setSkinPath(m_skinEdit->text());
     m_renderer->setFps(m_fpsSpin->value());
@@ -521,11 +657,22 @@ void MainWindow::startRender()
     m_renderer->setVolumes(m_musicVolumeSlider->value() / 100.0, m_hitsoundVolumeSlider->value() / 100.0);
     m_renderer->setHudOptions({{"score",m_hudScore->isChecked()},{"hp",m_hudHp->isChecked()},{"combo",m_hudCombo->isChecked()},{"pp",m_hudPp->isChecked()},{"error",m_hudError->isChecked()},{"keys",m_hudKeys->isChecked()},{"mods",m_hudMods->isChecked()},{"leaderboard",m_hudBoard->isChecked()},{"hitCounter",m_hudHits->isChecked()},{"strain",m_hudStrain->isChecked()}});
     m_renderer->setPlayfieldOptions({{"dim",m_backgroundDim->value()},{"storyboard",m_storyboardCheck->isChecked()},{"video",m_backgroundVideoCheck->isChecked()},{"parallax",m_parallaxCheck->isChecked()},{"blur",m_backgroundBlurCheck->isChecked()},{"bloom",m_bloomCheck->isChecked()},{"objects",m_drawObjectsCheck->isChecked()},{"approach",m_approachCheck->isChecked()},{"numbers",m_numbersCheck->isChecked()},{"follow",m_followPointsCheck->isChecked()},{"animations",m_hitAnimationsCheck->isChecked()},{"beatScale",m_beatScaleCheck->isChecked()},{"snakeIn",m_snakeInCheck->isChecked()},{"snakeOut",m_snakeOutCheck->isChecked()}});
+
+    m_lastRenderSettings = renderSettings();
+    m_lastRenderReplay = m_replayEdit->text();
+    m_lastRenderVideo = resolvedOutputPath();
+    m_hasRender = false;
+    m_publishBtn->setEnabled(false);
+    m_publishStatus->setText("Ожидание завершения рендера...");
+
     m_renderer->start();
 }
 
 void MainWindow::cancelRender()
 {
+    if (m_publisher && m_publisher->isBusy()) {
+        m_publisher->cancel();
+    }
     m_renderer->cancel();
 }
 
@@ -542,6 +689,20 @@ void MainWindow::onRenderFinished(int exitCode)
     m_progressBar->setValue(100);
     m_statusLabel->setText(exitCode == 0 ? "Completed!" : "Failed with code " + QString::number(exitCode));
     m_logEdit->appendPlainText("=== Render finished (code " + QString::number(exitCode) + ") ===");
+
+    if (exitCode == 0 && !m_lastRenderVideo.isEmpty() && QFileInfo::exists(m_lastRenderVideo)) {
+        m_hasRender = true;
+        m_publishBtn->setEnabled(true);
+        if (m_autoPublishCheck->isChecked()) {
+            publishLastRender();
+        } else {
+            m_publishStatus->setText("Рендер готов. Можно опубликовать.");
+        }
+    } else if (exitCode != 0) {
+        m_hasRender = false;
+        m_publishBtn->setEnabled(false);
+        m_publishStatus->setText("Рендер завершился с ошибкой.");
+    }
 }
 
 void MainWindow::onRenderProgress(int percent, const QString &status)
@@ -569,6 +730,71 @@ void MainWindow::toggleCustomResolution(bool enabled)
     m_heightSpin->setEnabled(enabled);
 }
 
+void MainWindow::publishLastRender()
+{
+    if (!m_hasRender || m_lastRenderVideo.isEmpty()) {
+        QMessageBox::warning(this, "Publish", "Сначала завершите рендер.");
+        return;
+    }
+    if (m_publisher && m_publisher->isBusy()) {
+        return;
+    }
+
+    const QString worker = m_workerEdit->text().trimmed();
+    const QString token = m_publishTokenEdit->text().trimmed();
+    const QString githubToken = m_githubTokenEdit->text().trimmed();
+    if (worker.isEmpty() || token.isEmpty()) {
+        QMessageBox::warning(this, "Publish",
+                             "Укажите Worker URL и токен публикации на вкладке Publish.");
+        return;
+    }
+    if (githubToken.isEmpty()) {
+        QMessageBox::warning(this, "Publish",
+                             "Укажите GitHub token на вкладке Publish — видео загружается в GitHub Releases.");
+        return;
+    }
+    if (!QFileInfo::exists(m_lastRenderVideo)) {
+        QMessageBox::warning(this, "Publish", "Файл рендера не найден: " + m_lastRenderVideo);
+        return;
+    }
+
+    saveConfig();
+    m_publishBtn->setEnabled(false);
+    m_publishStatus->setText("Публикация...");
+
+    Publisher::Job job;
+    job.workerUrl = worker;
+    job.token = token;
+    job.githubToken = githubToken;
+    job.danserPath = m_danserEdit->text();
+    job.songsPath = m_songsEdit->text();
+    job.replayPath = m_lastRenderReplay;
+    job.videoPath = m_lastRenderVideo;
+    job.settings = m_lastRenderSettings;
+    m_publisher->publish(job);
+}
+
+void MainWindow::onPublishStatus(const QString &message)
+{
+    m_publishStatus->setText(message);
+    m_logEdit->appendPlainText("[publish] " + message);
+}
+
+void MainWindow::onPublishFinished(const QString &url)
+{
+    QGuiApplication::clipboard()->setText(url);
+    m_publishStatus->setText("Опубликовано (ссылка скопирована): " + url);
+    m_logEdit->appendPlainText("[publish] " + url);
+    m_publishBtn->setEnabled(m_hasRender);
+}
+
+void MainWindow::onPublishError(const QString &message)
+{
+    m_publishStatus->setText("Ошибка публикации: " + message);
+    m_logEdit->appendPlainText("[publish] ERROR: " + message);
+    m_publishBtn->setEnabled(m_hasRender);
+}
+
 void MainWindow::saveConfig()
 {
     QJsonObject config;
@@ -580,6 +806,11 @@ void MainWindow::saveConfig()
     config["outputPath"] = m_outputEdit->text();
     config["replayDirectory"] = m_replayDirEdit->text();
     config["danserPath"] = m_danserEdit->text();
+    config["songsPath"] = m_songsEdit->text();
+    config["workerUrl"] = m_workerEdit->text();
+    config["publishToken"] = m_publishTokenEdit->text();
+    config["githubToken"] = m_githubTokenEdit->text();
+    config["autoPublish"] = m_autoPublishCheck->isChecked();
     config["encoder"] = m_encoderCombo->currentData().toString();
     config["crf"] = m_crfSpin->value();
     config["skipIntro"] = m_skipIntroCheck->isChecked();
@@ -609,6 +840,7 @@ void MainWindow::saveConfig()
     if (file.open(QIODevice::WriteOnly)) {
         file.write(QJsonDocument(config).toJson());
         file.close();
+        file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner);
     }
 }
 
@@ -635,6 +867,11 @@ void MainWindow::loadConfig()
         refreshReplayList();
     }
     if (config.contains("danserPath")) setDanserPath(config["danserPath"].toString());
+    if (config.contains("songsPath")) m_songsEdit->setText(config["songsPath"].toString());
+    if (config.contains("workerUrl")) m_workerEdit->setText(config["workerUrl"].toString());
+    if (config.contains("publishToken")) m_publishTokenEdit->setText(config["publishToken"].toString());
+    if (config.contains("githubToken")) m_githubTokenEdit->setText(config["githubToken"].toString());
+    if (config.contains("autoPublish")) m_autoPublishCheck->setChecked(config["autoPublish"].toBool());
     if (config.contains("encoder")) {
         const int index = m_encoderCombo->findData(config["encoder"].toString());
         if (index >= 0) m_encoderCombo->setCurrentIndex(index);
