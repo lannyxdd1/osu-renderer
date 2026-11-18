@@ -137,7 +137,10 @@ async function saveReplay(request, env, id) {
   if (!meta || typeof meta !== "object") return json({ error: "invalid body" }, 400);
 
   meta.id = id;
-  meta.publishedAt = new Date().toISOString();
+  // Keep the original timestamp when metadata is re-saved for an existing
+  // replay (a repair or a retry), so it does not jump to the top of the list.
+  const existing = await env.REPLAYS.get("replay:" + id, "json");
+  meta.publishedAt = (existing && existing.publishedAt) || new Date().toISOString();
   meta.media = mediaUrls(env, id);
   const summary = {
     id,
@@ -427,7 +430,7 @@ async function ogPage(env, id) {
 
   const beatmap = meta.beatmap || {};
   const player = string(meta.player) || "Unknown player";
-  const map = [beatmap.artist, beatmap.title].filter(Boolean).join(" - ");
+  const map = [beatmap.artist, beatmap.title].filter(Boolean).join(" - ") || "Unknown beatmap";
   const title = `${player} - ${map}${beatmap.difficulty ? " [" + beatmap.difficulty + "]" : ""}`;
   const mods = Array.isArray(meta.mods) && meta.mods.length ? meta.mods.join(" ") : "No mods";
   const accuracy = typeof meta.accuracy === "number" ? meta.accuracy.toFixed(2) + "%" : "";

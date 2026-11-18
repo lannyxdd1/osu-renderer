@@ -11,8 +11,10 @@ PAGES_BASE = "https://lannyxdd1.github.io/osu-renderer"
 # Repository that stores one release per replay. Must be public.
 GITHUB_REPO = "lannyxdd1/osu-renderer"
 # "redirect" serves video straight from GitHub, "proxy" streams it through
-# the Worker (useful if a provider or network blocks GitHub download URLs).
-MEDIA_MODE = "redirect"
+# the Worker. GitHub sends release assets as application/octet-stream with
+# `Content-Disposition: attachment`, which some browsers refuse to play, so
+# the default is "proxy": the Worker re-labels the stream as video/mp4.
+MEDIA_MODE = "proxy"
 
 [[kv_namespaces]]
 binding = "REPLAYS"

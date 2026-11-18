@@ -177,7 +177,8 @@
     playerEl.playsInline = true;
     playerEl.poster = API + "/t/" + encodeURIComponent(id) + ".jpg";
     var source = document.createElement("source");
-    source.src = API + "/v/" + encodeURIComponent(id) + ".mp4";
+    // The query string also busts an older cached redirect for the same path.
+    source.src = API + "/v/" + encodeURIComponent(id) + ".mp4?src=2";
     source.type = "video/mp4";
     playerEl.appendChild(source);
     content.appendChild(playerEl);

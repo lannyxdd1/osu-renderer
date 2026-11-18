@@ -91,7 +91,10 @@ void Publisher::publish(const Job &job)
         return;
     }
 
-    if (!QDir(m_job.songsPath).exists()) {
+    // An empty songsPath must be treated as "not set": QDir("") resolves to the
+    // current working directory and exists(), so the autodetect below would be
+    // skipped and the beatmap lookup would silently fail.
+    if (m_job.songsPath.isEmpty() || !QDir(m_job.songsPath).exists()) {
         const QString home = QDir::homePath();
         const QStringList candidates = {
             home + "/osu-wine/osu!/Songs",
@@ -105,6 +108,9 @@ void Publisher::publish(const Job &job)
                 break;
             }
         }
+    }
+    if (m_job.songsPath.isEmpty()) {
+        emit status("Папка Songs не найдена — название карты не попадёт в публикацию.");
     }
 
     if (m_tempDir) {
