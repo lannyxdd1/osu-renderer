@@ -331,7 +331,10 @@ async function serveMedia(request, env, kind, id) {
 
   const meta = await env.REPLAYS.get("replay:" + id, "json");
   if (!meta) return notFound();
-  const media = meta.media || mediaUrls(env, id);
+  // Derive the URLs from the current GITHUB_REPO instead of trusting the copy
+  // stored in KV: if the repository is renamed or moved to another account,
+  // old replays keep working without a data migration.
+  const media = mediaUrls(env, id);
   const target = media[mediaKey(kind)];
   if (!target) return notFound();
 
