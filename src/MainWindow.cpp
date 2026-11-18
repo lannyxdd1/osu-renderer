@@ -753,6 +753,13 @@ void MainWindow::publishLastRender()
                              "Укажите GitHub token на вкладке Publish — видео загружается в GitHub Releases.");
         return;
     }
+    if (!githubToken.startsWith("github_pat_") && !githubToken.startsWith("ghp_")) {
+        QMessageBox::warning(this, "Publish",
+                             "GitHub token выглядит неверно: он должен начинаться с github_pat_ "
+                             "(fine-grained) или ghp_ (classic). Проверьте, что в поле вставлен токен, "
+                             "а не строка команды.");
+        return;
+    }
     if (!QFileInfo::exists(m_lastRenderVideo)) {
         QMessageBox::warning(this, "Publish", "Файл рендера не найден: " + m_lastRenderVideo);
         return;
