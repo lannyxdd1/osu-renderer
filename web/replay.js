@@ -158,6 +158,61 @@
     return panels;
   }
 
+  function statTile(value, label) {
+    var tile = el("div", "stat");
+    tile.appendChild(el("span", "stat-value", value));
+    tile.appendChild(el("span", "stat-label", label));
+    return tile;
+  }
+
+  function formatNumber(value) {
+    if (typeof value !== "number" || !isFinite(value)) return null;
+    return value.toLocaleString("en-US");
+  }
+
+  function statsPanel(replay, beatmap, video) {
+    var panel = el("section", "panel stats");
+    panel.appendChild(el("h2", null, "Result"));
+
+    var grid = el("div", "stat-grid");
+    // `pp` is not stored in .osr files; the tile only appears if a future
+    // version starts sending it.
+    if (typeof replay.pp === "number") grid.appendChild(statTile(replay.pp.toFixed(0) + "pp", "PP"));
+    var score = formatNumber(replay.score);
+    if (score) grid.appendChild(statTile(score, "Score"));
+    if (typeof replay.accuracy === "number") {
+      grid.appendChild(statTile(replay.accuracy.toFixed(2) + "%", "Accuracy"));
+    }
+    if (typeof replay.maxCombo === "number") {
+      grid.appendChild(statTile(replay.maxCombo + "x", "Max combo"));
+    }
+    if (typeof replay.misses === "number") {
+      grid.appendChild(statTile(String(replay.misses), "Misses"));
+    }
+    panel.appendChild(grid);
+
+    var rows = el("div", "rows stats-rows");
+    var counts = replay.counts || {};
+    if (typeof counts["300"] === "number") rows.appendChild(rowNode("300 / 100 / 50", counts["300"] + " / " + (counts["100"] || 0) + " / " + (counts["50"] || 0)));
+    rows.appendChild(rowNode("Mods", (replay.mods || []).join(" ") || "No mods"));
+    if (beatmap.mapper) rows.appendChild(rowNode("Mapper", beatmap.mapper));
+    var difficulty = [];
+    if (beatmap.ar) difficulty.push("AR " + beatmap.ar);
+    if (beatmap.od) difficulty.push("OD " + beatmap.od);
+    if (beatmap.cs) difficulty.push("CS " + beatmap.cs);
+    if (beatmap.hp) difficulty.push("HP " + beatmap.hp);
+    if (difficulty.length) rows.appendChild(rowNode("Difficulty", difficulty.join("  ·  ")));
+    if (beatmap.bpm) rows.appendChild(rowNode("BPM", String(Math.round(beatmap.bpm * 100) / 100)));
+    if (beatmap.objects) rows.appendChild(rowNode("Objects", String(beatmap.objects)));
+    if (beatmap.length) rows.appendChild(rowNode("Map length", formatDuration(beatmap.length)));
+    if (video.duration) rows.appendChild(rowNode("Video length", formatDuration(video.duration)));
+    var date = formatDate(replay.replayDate) || formatDate(replay.publishedAt);
+    if (date) rows.appendChild(rowNode("Played", date));
+    panel.appendChild(rows);
+
+    return panel;
+  }
+
   function showError(text) {
     content.textContent = "";
     content.appendChild(el("div", "error", text));
@@ -181,24 +236,21 @@
     source.src = API + "/v/" + encodeURIComponent(id) + ".mp4?src=2";
     source.type = "video/mp4";
     playerEl.appendChild(source);
-    content.appendChild(playerEl);
 
-    content.appendChild(el("h1", null, replay.player || "Unknown player"));
-    content.appendChild(el("p", "subtitle muted", mapLine(beatmap)));
+    var main = el("div", "replay-main");
+    main.appendChild(playerEl);
 
-    var meta = el("div", "meta-row");
-    (replay.mods || []).forEach(function (mod) {
-      addBadge(meta, mod);
-    });
-    if (typeof replay.score === "number") addBadge(meta, replay.score + " pts");
-    if (typeof replay.accuracy === "number") addBadge(meta, replay.accuracy.toFixed(2) + "%");
-    if (typeof replay.combo === "number" && replay.combo) addBadge(meta, replay.combo + "x");
-    if (typeof replay.misses === "number") addBadge(meta, replay.misses + " miss");
-    if (video.duration) addBadge(meta, formatDuration(video.duration));
-    var date = formatDate(replay.replayDate) || formatDate(replay.publishedAt);
-    if (date) addBadge(meta, date);
-    if (beatmap.mapper) addBadge(meta, "mapped by " + beatmap.mapper);
-    content.appendChild(meta);
+    var head = el("div", "replay-head");
+    head.appendChild(el("h1", null, replay.player || "Unknown player"));
+    head.appendChild(el("p", "subtitle muted", mapLine(beatmap)));
+    if ((replay.mods || []).length) {
+      var mods = el("div", "meta-row");
+      (replay.mods || []).forEach(function (mod) {
+        addBadge(mods, mod);
+      });
+      head.appendChild(mods);
+    }
+    main.appendChild(head);
 
     var actions = el("div", "actions");
     var copyButton = el("button", "button", "Copy link");
@@ -207,7 +259,7 @@
     actions.appendChild(copyButton);
     if (replay.profile) actions.appendChild(downloadButton);
     actions.appendChild(copyStatus);
-    content.appendChild(actions);
+    main.appendChild(actions);
 
     copyButton.addEventListener("click", function () {
       var link = API + "/r/" + encodeURIComponent(id);
@@ -235,6 +287,14 @@
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     });
+
+    var side = el("aside", "replay-side");
+    side.appendChild(statsPanel(replay, beatmap, video));
+
+    var layout = el("div", "replay-layout");
+    layout.appendChild(main);
+    layout.appendChild(side);
+    content.appendChild(layout);
 
     var panels = settingsPanels(replay.settings || {});
     panels.forEach(function (panel) {
