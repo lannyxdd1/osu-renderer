@@ -172,9 +172,9 @@ void OsuApi::fetchScores(const QString &user, const QString &type, int limit,
         const QString path = QString("/api/v2/users/%1/scores/%2?mode=osu&limit=%3&include_fails=0")
                                  .arg(QString::number(userId), type)
                                  .arg(limit);
-        getJson(path, [done, username](const QByteArray &scoresBody, const QString &scoresError) {
+        getJson(path, [done, username, path](const QByteArray &scoresBody, const QString &scoresError) {
             if (!scoresError.isEmpty()) {
-                done({}, username, scoresError);
+                done({}, username, scoresError + " — GET " + path);
                 return;
             }
 
