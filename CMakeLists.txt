@@ -20,6 +20,8 @@ set(SOURCES
     src/ReplayInfo.cpp
     src/BeatmapIndex.cpp
     src/Publisher.cpp
+    src/OsuApi.cpp
+    src/OsuProfileDialog.cpp
 )
 
 # Headers
@@ -29,6 +31,8 @@ set(HEADERS
     src/ReplayInfo.h
     src/BeatmapIndex.h
     src/Publisher.h
+    src/OsuApi.h
+    src/OsuProfileDialog.h
 )
 
 # Executable

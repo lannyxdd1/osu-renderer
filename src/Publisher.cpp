@@ -94,21 +94,7 @@ void Publisher::publish(const Job &job)
     // An empty songsPath must be treated as "not set": QDir("") resolves to the
     // current working directory and exists(), so the autodetect below would be
     // skipped and the beatmap lookup would silently fail.
-    if (m_job.songsPath.isEmpty() || !QDir(m_job.songsPath).exists()) {
-        const QString home = QDir::homePath();
-        const QStringList candidates = {
-            home + "/osu-wine/osu!/Songs",
-            home + "/.local/share/osu-wine/osu!/Songs",
-            home + "/.osu/Songs",
-            home + "/osu!/Songs"
-        };
-        for (const QString &candidate : candidates) {
-            if (QDir(candidate).exists()) {
-                m_job.songsPath = candidate;
-                break;
-            }
-        }
-    }
+    m_job.songsPath = detectSongsDirectory(m_job.songsPath);
     if (m_job.songsPath.isEmpty()) {
         emit status("Папка Songs не найдена — название карты не попадёт в публикацию.");
     }

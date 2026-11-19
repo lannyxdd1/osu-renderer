@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "OsuProfileDialog.h"
 #include "Publisher.h"
 #include <QApplication>
 #include <QClipboard>
@@ -118,6 +119,11 @@ void MainWindow::setupUi()
         if (!path.isEmpty()) m_replayEdit->setText(path);
     });
     replayLayout->addRow("From folder:", m_replayCombo);
+
+    QPushButton *osuProfileBtn = new QPushButton("Реплеи с серверов osu!…", this);
+    osuProfileBtn->setToolTip("Скачать чужой реплей по нику: последние или лучшие игры.");
+    connect(osuProfileBtn, &QPushButton::clicked, this, &MainWindow::openOsuProfile);
+    replayLayout->addRow("osu! profile:", osuProfileBtn);
 
     m_outputEdit = new QLineEdit(this);
     m_outputEdit->setPlaceholderText("output.mp4");
@@ -544,6 +550,44 @@ void MainWindow::browseReplayDirectory()
     saveConfig();
 }
 
+void MainWindow::openOsuProfile()
+{
+    OsuProfileDialog::State state;
+    state.clientId = m_osuClientId;
+    state.clientSecret = m_osuClientSecret;
+    state.accessToken = m_osuAccessToken;
+    state.tokenExpiry = m_osuTokenExpiry;
+    state.replayDirectory = m_replayDirEdit->text();
+    state.songsDirectory = m_songsEdit->text();
+
+    OsuProfileDialog dialog(state, this);
+    connect(&dialog, &OsuProfileDialog::replayReady, this,
+            [this](const QString &path, const QString &replayDirectory) {
+        if (!replayDirectory.isEmpty() && m_replayDirEdit->text() != replayDirectory) {
+            m_replayDirEdit->setText(replayDirectory);
+            refreshReplayList();
+        }
+        m_replayEdit->setText(path);
+        m_logEdit->appendPlainText("[osu!] Реплей: " + path);
+        saveConfig();
+    });
+    dialog.exec();
+
+    const OsuProfileDialog::State updated = dialog.state();
+    m_osuClientId = updated.clientId;
+    m_osuClientSecret = updated.clientSecret;
+    m_osuAccessToken = updated.accessToken;
+    m_osuTokenExpiry = updated.tokenExpiry;
+    if (!updated.replayDirectory.isEmpty()) {
+        m_replayDirEdit->setText(updated.replayDirectory);
+        refreshReplayList();
+    }
+    if (m_songsEdit->text().isEmpty() && !updated.songsDirectory.isEmpty()) {
+        m_songsEdit->setText(updated.songsDirectory);
+    }
+    saveConfig();
+}
+
 void MainWindow::refreshReplayList()
 {
     const QString directory = m_replayDirEdit->text();
@@ -818,6 +862,10 @@ void MainWindow::saveConfig()
     config["publishToken"] = m_publishTokenEdit->text();
     config["githubToken"] = m_githubTokenEdit->text();
     config["autoPublish"] = m_autoPublishCheck->isChecked();
+    config["osuClientId"] = m_osuClientId;
+    config["osuClientSecret"] = m_osuClientSecret;
+    config["osuAccessToken"] = m_osuAccessToken;
+    config["osuTokenExpiry"] = static_cast<double>(m_osuTokenExpiry);
     config["encoder"] = m_encoderCombo->currentData().toString();
     config["crf"] = m_crfSpin->value();
     config["skipIntro"] = m_skipIntroCheck->isChecked();
@@ -879,6 +927,12 @@ void MainWindow::loadConfig()
     if (config.contains("publishToken")) m_publishTokenEdit->setText(config["publishToken"].toString());
     if (config.contains("githubToken")) m_githubTokenEdit->setText(config["githubToken"].toString());
     if (config.contains("autoPublish")) m_autoPublishCheck->setChecked(config["autoPublish"].toBool());
+    if (config.contains("osuClientId")) m_osuClientId = config["osuClientId"].toString();
+    if (config.contains("osuClientSecret")) m_osuClientSecret = config["osuClientSecret"].toString();
+    if (config.contains("osuAccessToken")) m_osuAccessToken = config["osuAccessToken"].toString();
+    if (config.contains("osuTokenExpiry")) {
+        m_osuTokenExpiry = static_cast<qint64>(config["osuTokenExpiry"].toDouble());
+    }
     if (config.contains("encoder")) {
         const int index = m_encoderCombo->findData(config["encoder"].toString());
         if (index >= 0) m_encoderCombo->setCurrentIndex(index);

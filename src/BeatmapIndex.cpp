@@ -1,6 +1,7 @@
 #include "BeatmapIndex.h"
 
 #include <QCryptographicHash>
+#include <QDir>
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
@@ -19,6 +20,29 @@ QString cacheFilePath()
 }
 
 } // namespace
+
+QString detectSongsDirectory(const QString &configured)
+{
+    if (!configured.isEmpty() && QDir(configured).exists()) {
+        return configured;
+    }
+
+    const QString home = QDir::homePath();
+    const QString user = qEnvironmentVariable("USER");
+    const QStringList candidates = {
+        home + "/osu-wine/osu!/Songs",
+        home + "/.local/share/osu-wine/osu!/Songs",
+        home + "/.wine/drive_c/users/" + user + "/AppData/Local/osu!/Songs",
+        home + "/.osu/Songs",
+        home + "/osu!/Songs"
+    };
+    for (const QString &candidate : candidates) {
+        if (QDir(candidate).exists()) {
+            return candidate;
+        }
+    }
+    return {};
+}
 
 QJsonObject BeatmapInfo::toJson() const
 {

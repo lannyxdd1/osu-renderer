@@ -37,6 +37,7 @@ public:
 private slots:
     void browseReplay();
     void browseReplayDirectory();
+    void openOsuProfile();
     void refreshReplayList();
     void browseDanser();
     void browseSongs();
@@ -115,6 +116,10 @@ private:
     QJsonObject m_lastRenderSettings;
     QString m_lastRenderVideo;
     QString m_lastRenderReplay;
+    QString m_osuClientId;
+    QString m_osuClientSecret;
+    QString m_osuAccessToken;
+    qint64 m_osuTokenExpiry = 0;
     bool m_hasRender = false;
     QPushButton *m_startBtn;
     QPushButton *m_cancelBtn;

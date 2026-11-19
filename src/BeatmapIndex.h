@@ -53,4 +53,8 @@ private:
 
 BeatmapInfo parseOsuFile(const QString &path);
 
+// Returns configured if it is a reachable Songs folder, otherwise tries the
+// usual osu!/osu-wine locations. Empty when nothing was found.
+QString detectSongsDirectory(const QString &configured);
+
 #endif // BEATMAPINDEX_H
