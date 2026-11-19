@@ -15,6 +15,8 @@ class QNetworkReply;
 class QProcess;
 class QTemporaryDir;
 
+struct ReplayInfo;
+
 // Encodes a 720p60 web copy of a finished render and uploads it to the
 // Cloudflare Worker configured by the user.
 class Publisher : public QObject
@@ -78,6 +80,7 @@ private:
     QString ffmpegPath() const;
     QJsonObject buildMetadata() const;
     double parseDuration(const QString &text) const;
+    void calculatePp(const ReplayInfo &replay, const QString &beatmapPath);
 
     Stage m_stage = Stage::Idle;
     Job m_job;

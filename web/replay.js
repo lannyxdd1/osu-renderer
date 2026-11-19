@@ -189,6 +189,9 @@
     if (typeof replay.misses === "number") {
       grid.appendChild(statTile(String(replay.misses), "Misses"));
     }
+    if (video.duration) {
+      grid.appendChild(statTile(formatDuration(video.duration), "Length"));
+    }
     panel.appendChild(grid);
 
     var rows = el("div", "rows stats-rows");
@@ -202,10 +205,12 @@
     if (beatmap.cs) difficulty.push("CS " + beatmap.cs);
     if (beatmap.hp) difficulty.push("HP " + beatmap.hp);
     if (difficulty.length) rows.appendChild(rowNode("Difficulty", difficulty.join("  ·  ")));
+    if (typeof replay.stars === "number") {
+      rows.appendChild(rowNode("Stars", replay.stars.toFixed(2)));
+    }
     if (beatmap.bpm) rows.appendChild(rowNode("BPM", String(Math.round(beatmap.bpm * 100) / 100)));
     if (beatmap.objects) rows.appendChild(rowNode("Objects", String(beatmap.objects)));
     if (beatmap.length) rows.appendChild(rowNode("Map length", formatDuration(beatmap.length)));
-    if (video.duration) rows.appendChild(rowNode("Video length", formatDuration(video.duration)));
     var date = formatDate(replay.replayDate) || formatDate(replay.publishedAt);
     if (date) rows.appendChild(rowNode("Played", date));
     panel.appendChild(rows);

@@ -136,8 +136,12 @@ void Publisher::publish(const Job &job)
     emit status("Поиск карты в Songs...");
     QCoreApplication::processEvents();
     BeatmapIndex index;
-    m_beatmapJson = index.find(replay.beatmapMd5, m_job.songsPath).toJson();
+    const BeatmapInfo beatmap = index.find(replay.beatmapMd5, m_job.songsPath);
+    m_beatmapJson = beatmap.toJson();
     m_beatmapJson["md5"] = replay.beatmapMd5;
+    if (replay.gameMode == 0 && !beatmap.path.isEmpty()) {
+        calculatePp(replay, beatmap.path);
+    }
 
     m_id = generateId();
     m_stage = Stage::Probing;
@@ -446,6 +450,69 @@ void Publisher::postJson(const QString &url, const QJsonObject &body,
         }
         next(response);
     });
+}
+
+void Publisher::calculatePp(const ReplayInfo &replay, const QString &beatmapPath)
+{
+    // ppcalc is a small Go helper that links danser's own pp calculator, so the
+    // number matches the PP counter visible in the render. It is optional: if
+    // the helper is missing, publishing continues without PP.
+    QString helper = qEnvironmentVariable("OSU_RENDER_PPCALC");
+    if (helper.isEmpty()) {
+        helper = QCoreApplication::applicationDirPath() + "/ppcalc";
+    }
+    if (!QFileInfo(helper).isExecutable()) {
+        emit status("ppcalc не найден — PP не будет добавлен.");
+        return;
+    }
+
+    emit status("Подсчёт PP...");
+    QCoreApplication::processEvents();
+
+    QProcess process;
+    QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+    // ppcalc links libbass through danser's beatmap package; the shared
+    // libraries live next to danser-cli.
+    const QString danserDir = QFileInfo(m_job.danserPath).absolutePath();
+    const QString libraryPath = environment.value("LD_LIBRARY_PATH");
+    environment.insert("LD_LIBRARY_PATH",
+                       libraryPath.isEmpty() ? danserDir : danserDir + ':' + libraryPath);
+    process.setProcessEnvironment(environment);
+
+    const QStringList args = {
+        "-map", beatmapPath,
+        "-mods", replay.modNames().join(QString()),
+        "-acc", QString::number(replay.accuracy(), 'f', 4),
+        "-combo", QString::number(replay.maxCombo),
+        "-miss", QString::number(replay.misses),
+        "-n300", QString::number(replay.count300),
+        "-n100", QString::number(replay.count100),
+        "-n50", QString::number(replay.count50),
+        "-score", QString::number(replay.score)
+    };
+
+    process.start(helper, args);
+    if (!process.waitForStarted(5000) || !process.waitForFinished(30000)) {
+        process.kill();
+        process.waitForFinished(1000);
+        emit status("PP не посчитан: ppcalc не ответил.");
+        return;
+    }
+    if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
+        emit status("PP не посчитан: "
+                    + QString::fromUtf8(process.readAllStandardError()).trimmed());
+        return;
+    }
+
+    const QJsonObject result = QJsonDocument::fromJson(process.readAllStandardOutput()).object();
+    const double pp = result.value("pp").toDouble(-1.0);
+    const double stars = result.value("stars").toDouble(-1.0);
+    if (pp > 0.0) {
+        m_replayJson["pp"] = pp;
+    }
+    if (stars > 0.0) {
+        m_replayJson["stars"] = stars;
+    }
 }
 
 QJsonObject Publisher::buildMetadata() const

@@ -64,6 +64,24 @@ if ! cmake --build build -j"$(nproc)" >>"$LOG" 2>&1; then
     [ -x "$BIN" ] || exit 1
 fi
 
+# 4. Optional PP calculator: a small Go helper that reuses danser's own pp
+#    code. Without it the app still publishes, just without PP.
+if command -v go >/dev/null 2>&1 && [ -f tools/ppcalc/main.go ]; then
+    stale="$(find tools/ppcalc \( -name '*.go' -o -name 'go.mod' -o -name 'go.sum' \) \
+        -newer build/ppcalc -print -quit 2>/dev/null)"
+    if [ ! -x build/ppcalc ] || [ -n "$stale" ]; then
+        if [ ! -x build/ppcalc ]; then
+            notify "Собираю калькулятор PP…" "Первый запуск, это может занять минуту."
+        fi
+        log "ppcalc: building"
+        if (cd tools/ppcalc && go build -o ../../build/ppcalc . >>"$LOG" 2>&1); then
+            log "ppcalc: ok"
+        else
+            log "ppcalc: build failed, publishing will continue without PP"
+        fi
+    fi
+fi
+
 if [ "${OSU_RENDER_NO_LAUNCH:-0}" = "1" ]; then
     log "launch: skipped (OSU_RENDER_NO_LAUNCH=1)"
     exit 0
