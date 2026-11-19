@@ -63,6 +63,7 @@ private:
     QPushButton *m_downloadBtn;
     QCheckBox *m_mapCheck;
     QLabel *m_status;
+    QString m_username;
     bool m_busy = false;
 };
 

@@ -33,9 +33,12 @@ public:
     void setCredentials(const Credentials &credentials);
     Credentials credentials() const { return m_credentials; }
 
-    // type is "recent" or "best".
+    // type is "recent" or "best". The player is looked up first so a typo in
+    // the nickname produces a clear message instead of a bare 404, and the
+    // canonical nickname is returned for file names.
     void fetchScores(const QString &user, const QString &type, int limit,
-                     std::function<void(const QJsonArray &scores, const QString &error)> done);
+                     std::function<void(const QJsonArray &scores, const QString &username,
+                                        const QString &error)> done);
 
     // Writes the .osr to targetPath. legacyScoreId may be -1.
     void downloadReplay(qint64 scoreId, qint64 legacyScoreId, const QString &targetPath,

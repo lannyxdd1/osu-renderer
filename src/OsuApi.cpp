@@ -151,29 +151,45 @@ void OsuApi::getJson(const QString &path,
 }
 
 void OsuApi::fetchScores(const QString &user, const QString &type, int limit,
-                         std::function<void(const QJsonArray &, const QString &)> done)
+                         std::function<void(const QJsonArray &, const QString &, const QString &)> done)
 {
-    const QString path = QString("/api/v2/users/%1/scores/%2?mode=osu&limit=%3&include_fails=0")
-                             .arg(QString::fromLatin1(QUrl::toPercentEncoding(user)),
-                                  type)
-                             .arg(limit);
-    getJson(path, [done](const QByteArray &body, const QString &error) {
+    const QString encoded = QString::fromLatin1(QUrl::toPercentEncoding(user));
+    getJson(QString("/api/v2/users/%1").arg(encoded),
+            [this, encoded, user, type, limit, done](const QByteArray &body, const QString &error) {
         if (!error.isEmpty()) {
-            done({}, error);
+            done({}, user, QString("Игрок «%1» не найден на osu! — %2").arg(user, error));
             return;
         }
 
-        const QJsonDocument document = QJsonDocument::fromJson(body);
-        if (document.isArray()) {
-            done(document.array(), {});
+        const QJsonObject profile = QJsonDocument::fromJson(body).object();
+        const QString username = profile.value("username").toString(user);
+        const qint64 userId = profile.value("id").toInteger();
+        if (userId <= 0) {
+            done({}, username, "osu! не вернул ID игрока.");
             return;
         }
-        const QJsonObject object = document.object();
-        if (object.value("scores").isArray()) {
-            done(object.value("scores").toArray(), {});
-            return;
-        }
-        done({}, "Неожиданный ответ osu!api.");
+
+        const QString path = QString("/api/v2/users/%1/scores/%2?mode=osu&limit=%3&include_fails=0")
+                                 .arg(QString::number(userId), type)
+                                 .arg(limit);
+        getJson(path, [done, username](const QByteArray &scoresBody, const QString &scoresError) {
+            if (!scoresError.isEmpty()) {
+                done({}, username, scoresError);
+                return;
+            }
+
+            const QJsonDocument document = QJsonDocument::fromJson(scoresBody);
+            if (document.isArray()) {
+                done(document.array(), username, {});
+                return;
+            }
+            const QJsonObject object = document.object();
+            if (object.value("scores").isArray()) {
+                done(object.value("scores").toArray(), username, {});
+                return;
+            }
+            done({}, username, "Неожиданный ответ osu!api.");
+        });
     });
 }
 

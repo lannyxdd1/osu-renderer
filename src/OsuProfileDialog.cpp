@@ -246,7 +246,8 @@ void OsuProfileDialog::loadScores()
     m_api->setCredentials({clientId, clientSecret, m_state.accessToken, m_state.tokenExpiry});
 
     m_api->fetchScores(user, m_typeCombo->currentData().toString(), 50,
-                       [this](const QJsonArray &scores, const QString &error) {
+                       [this](const QJsonArray &scores, const QString &username,
+                              const QString &error) {
         m_busy = false;
         const OsuApi::Credentials credentials = m_api->credentials();
         m_state.accessToken = credentials.accessToken;
@@ -258,8 +259,10 @@ void OsuProfileDialog::loadScores()
             return;
         }
 
+        m_username = username;
         fillTable(scores);
-        setStatus(QString("Загружено игр: %1. Выберите игру и нажмите «Скачать реплей».")
+        setStatus(QString("Игрок %1: загружено игр %2. Выберите игру и нажмите «Скачать реплей».")
+                      .arg(username)
                       .arg(static_cast<int>(scores.size())));
         updateButtons();
     });
@@ -339,7 +342,9 @@ void OsuProfileDialog::downloadSelected()
 
     const QJsonObject beatmap = score.value("beatmap").toObject();
     const QJsonObject beatmapset = score.value("beatmapset").toObject();
-    const QString player = m_userEdit->text().trimmed();
+    const QString player = m_username.isEmpty()
+        ? m_userEdit->text().trimmed()
+        : m_username;
     const QString artist = beatmapset.value("artist").toString(beatmap.value("artist").toString());
     const QString title = beatmapset.value("title").toString(beatmap.value("title").toString());
     const QString version = beatmap.value("version").toString();
